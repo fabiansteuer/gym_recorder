@@ -9,8 +9,6 @@ logging.basicConfig(format='%(asctime)s %(message)s')
 logger = logging.getLogger()
 logger.setLevel(level=logging.INFO) 
 
-import time
-
 import matplotlib.pyplot as plt
 
 
