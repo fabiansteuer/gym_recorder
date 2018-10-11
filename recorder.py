@@ -1,6 +1,5 @@
 '''Record OpenAI Baselines models interacting with OpenAI Gym environments.'''
 
-import time
 
 import logging
 from importlib import reload
@@ -9,48 +8,11 @@ logging.basicConfig(format='%(asctime)s %(message)s')
 logger = logging.getLogger()
 logger.setLevel(level=logging.INFO) 
 
+import time
+import numpy as np
 import matplotlib.pyplot as plt
 
-
-def shortlist_operations(operations, require=[], exclude=[], shape_includes=None):
-    '''Shortlist Tensorflow operations based on strings that are required in or 
-    excluded from their names and the shape of their first output tensor.'''
-    
-    for req in require:
-        req_shortlist = [op for op in operations if req in op.name]
-    else:
-        req_shortlist = operations
-    for exc in exclude:
-        exc_shortlist = [op for op in operations if exc not in op.name]
-    else:
-        exc_shortlist = operations
-    name_shortlist = list(set(req_shortlist) & set(exc_shortlist))
-    
-    if shape_includes:
-        total_shortlist = []
-        shapes = []
-        for op in name_shortlist:
-            try:
-                shape = op.outputs[0].shape.as_list()  # shape of the first output tensor
-                if shape_includes in shape:
-                    total_shortlist.append(op)
-                    shapes.append(shape)
-            except ValueError:  # because as_list() is not defined on an unknown TensorShape
-                pass
-            except IndexError:  # because list index of outputs[0] out of range
-                pass
-        return total_shortlist, shapes
-    
-    return name_shortlist
-
-def get_activations(session, operation_name, feed_dict):
-    '''Evaluate an operation in a Tensorflow session to get its output tensor.'''
-    # Use the first output tensor of the operation
-    tensor = session.graph.get_operation_by_name(operation_name).outputs[0]
-    activations = tensor.eval(session=session, 
-                              feed_dict=feed_dict)
-    return activations
-
+from .utils import get_activations
 
 class Recorder(object):
     
@@ -73,7 +35,7 @@ class Recorder(object):
             self.activations[op_name] = []
         
 
-    def record(self, session, feed_operations, max_episodes=1, max_steps=None):
+    def record(self, session, feed_operations, max_steps=None, max_episodes=1, sample_modulo=1):
         '''
         TODO Make feed_operations accept both Tensorflow operations and operation names
         TODO Use Tensorflow writer instead of keeping records in memory
@@ -81,7 +43,7 @@ class Recorder(object):
         '''
         
         logger.info(f'Start recording for {max_steps} steps or {max_episodes} episodes '
-                     '(whichever is reached first)')
+                    f'with a sample modulo of {sample_modulo}')
 
         n_run = 0
         total_steps = 0
@@ -99,38 +61,39 @@ class Recorder(object):
             episode_reward = 0
 
             while not done:
-                
-                if max_steps:
-                    if total_steps >= max_steps:
-                        stop = True
-                        break
 
-                n_step += 1
                 total_steps += 1
-                self.n_runs.append(n_run)
-                self.n_steps.append(n_step)
-
-                self.frames.append(self.env.render(mode='rgb_array'))
+                if max_steps and total_steps >= max_steps:
+                    stop = True
+                    break
                 
-                self.observations.append(ob)
-                action = self.model(ob)[0]
-                self.actions.append(action)
+                n_step += 1
+                record_step = (n_step % sample_modulo == 0)
+                
+                if record_step:
+                    self.n_runs.append(n_run)
+                    self.n_steps.append(n_step)
+                    self.frames.append(self.env.render(mode='rgb_array'))
+                    self.observations.append(ob)
 
+                action = self.model.step(ob)
                 ob, reward, done, _ = self.env.step(action)
                 ob = ob[None] # extract numpy array from LazyFrames object
-
                 episode_reward += reward
-                self.episode_rewards.append(episode_reward)
-                
-                for feed_op in feed_operations:
-                    feed_dict[feed_op] = ob
 
-                for op_name in self.operations:
-                    self.activations[op_name].append(
-                        get_activations(
-                            session = session,
-                            operation_name = self.operations[op_name],
-                            feed_dict = feed_dict))
+                if record_step:
+                    self.actions.append(action)
+                    self.episode_rewards.append(episode_reward)
+                
+                    for feed_op in feed_operations:
+                        feed_dict[feed_op] = ob
+
+                    for op_name in self.operations:
+                        self.activations[op_name].append(
+                            get_activations(
+                                session = session,
+                                operation_name = self.operations[op_name],
+                                feed_dict = feed_dict))
                     
                 if total_steps % 100 == 0:
                     logger.info(f'Step {total_steps} in episode {n_run}')
@@ -138,9 +101,22 @@ class Recorder(object):
             if stop:
                 break
 
-        logger.info(f'Done recording {total_steps} steps in {round(time.time()-start_time, 1)} seconds')
+        logger.info(f'Done recording {total_steps} steps with a sample modulo of {sample_modulo} '
+                    f'in {round(time.time()-start_time, 1)} seconds')
                     
-    def replay(self, start=None, stop=None, step=None):
-        for frame in self.frames[start:stop+1:step]:
-            plt.imshow(frame)
+    def replay(self, start=None, stop=None, step=None, mode='frames'):
+
+        def reduce_observations():
+            '''Reduce observation tensors of shape [batch_size, x, y, last_n_frames] to shape [x,y].'''
+            # Remove empty dimension and reduce by calculating the mean over the last remaining dimension 
+            reduced = [np.add.reduce(np.squeeze(ob), axis=2) / ob.shape[-1] for ob in self.observations]
+            return reduced 
+
+        if mode == 'frames':
+            tape = self.frames
+        elif mode == 'observations':
+            tape = reduce_observations()
+        for image in tape[start:stop+1:step]:
+            print(image.shape)
+            plt.imshow(image, cmap='gray')
             plt.show()

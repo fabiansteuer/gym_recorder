@@ -2,7 +2,10 @@
 
 def shortlist_operations(operations, require=[], exclude=[], shape_includes=None):
     '''Shortlist Tensorflow operations based on strings that are required in or 
-    excluded from their names and the shape of their first output tensor.'''
+    excluded from their names and the shape of their first output tensor.
+    
+    TODO Make shape_includes accept scalars and lists
+    '''
     
     for req in require:
         req_shortlist = [op for op in operations if req in op.name]
