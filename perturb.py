@@ -25,7 +25,7 @@ def register_perturber(name):
 @register_perturber('blurlight')
 def blurlight(image, mask, sigma=4):
     '''Blur a small region of image.'''
-    return image*(1-mask) + gaussian_filter(image, sigma=16)*mask
+    return image*(1-mask) + gaussian_filter(image, sigma)*mask
 
 
 @register_perturber('searchlight')
@@ -38,10 +38,9 @@ def perturb(tensor, perturber='blurlight', step_size=1):
     '''Perturb tensor using perturber function with a step size of step_size.'''
 
     perturber = perturber_mapping[perturber]
-    print(perturber_mapping)
     
     shape = tensor.shape
-    assert len(shape) == 4, ('Tensor to perturb should be of shape [batch_size, x, y, n_channels] '
+    assert len(shape) == 4, (f'Tensor to perturb should be of shape [batch_size, x, y, n_channels] '
                              f'but has shape {shape}.')
     
     centers = []
@@ -52,6 +51,7 @@ def perturb(tensor, perturber='blurlight', step_size=1):
             perturbed.append(perturber(tensor, mask))
             centers.append((i,j))
 
-    assert perturbed[0].shape == shape, 'Peturbed tensor has a different shape than the original tensor.'
+    assert perturbed[0].shape == shape, (f'Perturbed tensor (shape={perturbed[0].shape} has a '
+                                         f'different shape than the original tensor (shape={shape}).')
 
     return perturbed, centers
