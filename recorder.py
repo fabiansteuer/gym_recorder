@@ -14,9 +14,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from .utils import get_activations
+from .highlighter import get_saliency, overlay
+
 
 from tensorboard.plugins.agent import Agent
-agent = Agent('/Users/fabian/projects/aicamp/rlmonitor/log_data')  # TODO do not hardcode
+agent = Agent('/Users/fabian/projects/aicamp/rlmonitor/log_data')  # TODO un-hardcode
 
 class Recorder(object):
     
@@ -119,7 +121,7 @@ class Recorder(object):
         log.info(f'Done recording {total_steps} steps with a sample modulo of {sample_modulo} '
                     f'in {round(time.time()-start_time, 1)} seconds')
                     
-    def replay(self, start=None, stop=None, step=None, mode='frames'):
+    def replay(self, start=None, stop=None, step=None, mode='frames', cmap=None):
 
         def reduce_observations():
             '''Reduce observation tensors of shape [1 , x, y, last_n_frames] to shape [x,y].'''
@@ -131,6 +133,17 @@ class Recorder(object):
             tape = self.frames
         elif mode == 'observations':
             tape = reduce_observations()
+        elif mode == 'saliencies':
+            tape == self.saliencies
         for image in tape[start:stop+1:step]:
-            plt.imshow(image, cmap='gray')
+            plt.imshow(image, cmap=cmap)
             plt.show()
+
+    def get_saliencies(self, session, operation_name, feed_operations, step_size=1):
+        self.saliencies = []
+        for ix, ob in enumerate(self.observations):
+            saliency = get_saliency(ob, session=session, operation_name=operation_name, 
+                                    feed_operations = feed_operations, step_size=step_size)
+            image = self.frames[ix]
+            heatmap = overlay(image, saliency)
+            self.saliencies.append(heatmap)
