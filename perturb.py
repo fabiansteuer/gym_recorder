@@ -1,9 +1,10 @@
 '''Perturb tensors to see how this impacts a model's predictions.'''
 
+# TODO Move to highlighter.py
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter
-
 
 def get_mask(center, shape, radius=1, sigma=3):
     '''Get a 2D Gaussian mask around center in a tensor of size shape.'''

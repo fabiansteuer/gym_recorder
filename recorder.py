@@ -18,7 +18,7 @@ from .highlighter import get_saliency, overlay
 
 
 from tensorboard.plugins.agent import Agent
-agent = Agent('/Users/fabian/projects/aicamp/rlmonitor/log_data')  # TODO un-hardcode
+agent = Agent('/Users/fabian/projects/aicamp/log')  # TODO un-hardcode
 
 class Recorder(object):
     
@@ -62,7 +62,7 @@ class Recorder(object):
             n_episode += 1
             n_step = 0
             ob = self.env.reset()  # LazyFrames object that stores the observation as numpy array
-            ob = ob[None]  # extract Numpy array from LazyFrames object
+            # ob = ob[None]  # extract Numpy array from LazyFrames object
             done = False
             episode_reward = 0
 
@@ -74,7 +74,7 @@ class Recorder(object):
                     break
                 
                 n_step += 1
-                record_step = (n_step % sample_modulo == 0)
+                record_step = (n_step % sample_modulo == 0)  # TODO Make that first frame always recorded
                 
                 last_frame = self.env.render(mode='rgb_array')
 
@@ -82,19 +82,20 @@ class Recorder(object):
                     self.n_episodes.append(n_episode)
                     self.n_steps.append(n_step)
                     self.frames.append(last_frame)
-                    self.observations.append(ob)
+                    self.observations.append(ob[None])  # TODO Is None correct here?
 
-                action = self.act.step(ob)[0]  # TODO check if [0] is correct
+                action = self.act.step(ob) # [0]  # TODO check if [0] is correct
+
                 ob, reward, done, _ = self.env.step(action)
-                ob = ob[None] # extract NumPy array from LazyFrames object
+                # ob = ob[None] # extract NumPy array from LazyFrames object
                 episode_reward += reward
 
                 agent.update(
                     session=session,
-                    env_name='PongNoFrameskip-v4',
+                    env_name='EnduroNoFrameskip-v4',
                     frame=last_frame,
                     reward=reward,
-                    action=action,
+                    action=action[0],
                     done=done
                 )
 
@@ -103,7 +104,7 @@ class Recorder(object):
                     self.episode_rewards.append(episode_reward)
                 
                     for feed_op in feed_operations:
-                        feed_dict[feed_op] = ob
+                        feed_dict[feed_op] = ob[None]  # TODO Is None correct here?
 
                     for op_name in self.operations:
                         self.activations[op_name].append(
@@ -139,11 +140,13 @@ class Recorder(object):
             plt.imshow(image, cmap=cmap)
             plt.show()
 
-    def get_saliencies(self, session, operation_name, feed_operations, step_size=1):
+    def get_saliencies(self, session, operation_name, feed_operations, step_size=1, mode='clipping'):
+        n_observations = len(self.observations)
         self.saliencies = []
         for ix, ob in enumerate(self.observations):
+            log.info(f'Computing saliency {ix+1} of {n_observations}.')
             saliency = get_saliency(ob, session=session, operation_name=operation_name, 
                                     feed_operations = feed_operations, step_size=step_size)
             image = self.frames[ix]
-            heatmap = overlay(image, saliency)
+            heatmap = overlay(image, saliency, mode=mode)
             self.saliencies.append(heatmap)

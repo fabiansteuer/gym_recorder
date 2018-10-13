@@ -1,7 +1,9 @@
 '''Get saliency maps.'''
 
+import math
 import numpy as np
 from skimage.transform import rescale
+from scipy.ndimage.filters import gaussian_filter
 
 from .perturb import perturb
 from .utils import get_activations
@@ -29,11 +31,14 @@ def get_saliency(observation, session, operation_name, feed_operations, step_siz
     new_q_values = get_q_values(perturbations)
     
     distances = euclidian_distance(new_q_values, q_values)
-    distances /+ distances.max()
+    distances /+ distances.max()  # TODO Division by 0
     
     saliency = np.zeros([84,84], dtype=np.float64)  # TODO np.float64 likely an overkill
     for dist, center in zip(distances,centers):
         saliency[center] = dist
+
+    if step_size > 0:  # blur saliency
+        saliency = gaussian_filter(saliency, sigma=math.sqrt(step_size))
         
     # Scale to interval [0,1]  # TODO Should scaling rather take the whole batch of saliencies into account?
     scaled_saliency = saliency - saliency.min()
@@ -64,10 +69,10 @@ def overlay(image, saliency, channels=[2], opacity=3.0, mode='clipping'):
     image = image.astype(np.float64)  # TODO np.float64 likely an overkill
     image /= 255
 
-    # Overlay
+    # Overlay TODO Doesn't work for white background
     if mode == 'weighted_mean':
         image[:,:,channels] = (1-opacity)*image[:,:,channels] + opacity*saliency[:,:,np.newaxis]
-    elif mode == 'clipping':
+    elif mode == 'clipping':  
         image[:,:,channels] += opacity * saliency[:,:,np.newaxis]
         image = image.clip(0,1)
 
