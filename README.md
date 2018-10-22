@@ -1,7 +1,7 @@
 # OpenAI Gym Recorder
 
 - Record OpenAI Baselines models interacting with OpenAI Gym environments
-- Perturb input game states to produce saliency maps of what the model bases its decision on
+- Perturb input game states to produce saliency maps of what features are important for the model
 - Create t-SNE plots of activations in higher layers of DQNs to identify meaningful clusters of representations
 - Used in ![Agent](https://github.com/andrewschreiber/agent/)
 
